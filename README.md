@@ -98,7 +98,7 @@ The origin image is `assets/origin.png` and the reconstruction will be put into 
 
 ### Inpainting
 
-Do inpainting with an ODE solver (inpainting-ODE) or an SDE solver (inpainting-SDE).
+Do inpainting with an ODE solver (inpainting-ODE) or a SDE solver (inpainting-SDE).
 
 ```angular2html
 python inpainting.py         # inpainting-ODE
