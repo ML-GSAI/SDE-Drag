@@ -134,13 +134,6 @@ python inpainting.py  --sde  # inpainting-SDE
 
 The inpainting results will be put into`output/inpainting`. We also provide other supported arguments of inpainting:
 
-<details open>
-<summary><font size="4">
-Results in inpainting
-</font></summary>
-<img src="./assets/results/inpainting_results.png" />
-</details>
-
 ```angular2html
     --seed          random seed
     --img_path      directory including origin.png and mask.png
@@ -149,6 +142,13 @@ Results in inpainting
                         order=1: DDIM(ODE) or DDIM(SDE)
                         order=2: DPM-Sover++(ODE) or SDE-DPM-Solver++(SDE)
 ```
+
+<details open>
+<summary><font size="4">
+Results in inpainting
+</font></summary>
+<img src="./assets/results/inpainting_results.png" />
+</details>
 
 ### DiffEdit
 
