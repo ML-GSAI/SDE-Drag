@@ -17,7 +17,7 @@
       <img src="./assets/demo/tree.gif"  width="32.5%" />
     </p>
   <p align="center">
-    <a href="https://drive.google.com/file/d/1W0zA20UVKnakaCIVpFcbabcdb4XmDcMz/view?usp=drive_link"><img alt='page' src="https://img.shields.io/badge/Paper-Link-blue"></a>
+    <a href="http://arxiv.org/abs/2311.01410"><img alt='page' src="https://img.shields.io/badge/Arxix-2311.01410-red"></a>
     <a href="https://ml-gsai.github.io/SDE-Drag-demo/"><img alt='page' src="https://img.shields.io/badge/Project-Website-orange"></a>
   </p>
 </p>
