@@ -78,6 +78,33 @@ python sdedrag_dragbench.py
 
 All the editing results will be put into `output/sdedrag_dragbench`.
 
+<details open>
+<summary><font size="4">
+Results in Dragging
+</font></summary>
+<img src="./assets/results/drag_results.png" />
+</details>
+
+### Highlight
+we highlight that SDE-Drag can improve the alignment between the prompt and 
+sample from advanced AI-painting systems like Stable Diffusion and DALL·E 3.
+
+<div style="display: flex; justify-content: center; flex-wrap: wrap;">
+    <img src="./assets/demo/dalle_origin.jpg" style="width: 30%; margin-right: 0.5%;" />
+    <img src="./assets/demo/dalle_input.jpg" style="width: 30%; margin-right: 0.5%;"/>
+    <img src="./assets/demo/dalle_drag.jpg" style="width: 30%; margin-right: 0.5%;" />
+</div>
+
+The image on the far left was created by DALL·E 3 with the prompt: 
+*"A 3D render of a coffee mug placed on a window sill during a stormy day. 
+The storm outside the window is reflected in the coffee, with miniature 
+lightning bolts and turbulent waves seen inside the mug. The room is dimly 
+lit, adding to the dramatic atmosphere."* However, as we can observe, there 
+are no lightning bolts in the coffee. In this case, we can employ SDE-Drag 
+to introduce lightning bolts into the coffee mug, thus achieving a closer 
+match to the provided prompt.
+
+
 ## :bulb: More image editing
 
 ### Cycle-SDE
@@ -106,6 +133,13 @@ python inpainting.py  --sde  # inpainting-SDE
 ```
 
 The inpainting results will be put into`output/inpainting`. We also provide other supported arguments of inpainting:
+
+<details open>
+<summary><font size="4">
+Results in inpainting
+</font></summary>
+<img src="./assets/results/inpainting_results.png" />
+</details>
 
 ```angular2html
     --seed          random seed
@@ -137,9 +171,17 @@ The DiffEdit results will be put into`output/diffedit`. We also provide other su
     --encode_ratio  encode ration in DiffEdit, t_0 in our paper
 ```
 
+<details open>
+<summary><font size="4">
+Results in DiffEdit
+</font></summary>
+<img src="./assets/results/diffedit_results.png" />
+</details>
+
 ## :label: TODO
 
 - [ ] Optimize inference speed.
+- [ ] Support more editing task.
 - [ ] Improve SDE-Drag UI.
 - [ ] Support more base model.
 - [ ] Integrated into diffusers and stable diffusion WebUI.
