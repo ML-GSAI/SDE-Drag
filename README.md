@@ -192,3 +192,13 @@ This project is heavily based on the [Diffusers](https://github.com/huggingface/
 Our SDE-Drag UI design is inspired by [DragDiffusion](https://github.com/Yujun-Shi/DragDiffusion). Thanks for their great work!
 
 
+## :black_nib: Citation
+
+```bibtex
+@article{nie2023blessing,
+  title={The Blessing of Randomness: SDE Beats ODE in General Diffusion-based Image Editing},
+  author={Nie, Shen and Guo, Hanzhong Allan and Lu, Cheng and Zhou, Yuhao and Zheng, Chenyu and Li, Chongxuan},
+  journal={arXiv preprint arXiv:2311.01410},
+  year={2023}
+}
+```
