@@ -152,7 +152,7 @@ Results in inpainting
 
 ### DiffEdit
 
-Employ [DiffEdit](https://arxiv.org/abs/2210.11427) with an ODE solver (DiffEdit-ODE) or and SDE solver (DiffEdit-SDE)
+Employ [DiffEdit](https://arxiv.org/abs/2210.11427) with an ODE solver (DiffEdit-ODE) or an SDE solver (DiffEdit-SDE)
 
 ```angular2html
 python diffedit.py         # DiffEdit-ODE
