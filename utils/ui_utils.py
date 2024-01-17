@@ -20,10 +20,10 @@ import json
 import os
 from copy import deepcopy
 
+import PIL.Image
 import cv2
 import gradio as gr
 import numpy as np
-import PIL.Image
 from PIL import Image
 
 from .drag import drag
@@ -42,6 +42,7 @@ def center_crop(width, height, img):
     img = img.resize((width, height), resample)  # resize the center crop from [crop, crop] to [width, height]
 
     return np.array(img).astype(np.uint8)
+
 
 # user click the image to get points, and show the points on the image
 def get_point(img, sel_pix, evt: gr.SelectData):
@@ -63,7 +64,8 @@ def get_point(img, sel_pix, evt: gr.SelectData):
             points = []
     return img if isinstance(img, np.ndarray) else np.array(img)
 
-def mask_image(image, mask, color=[255,0,0], alpha=0.5):
+
+def mask_image(image, mask, color=[255, 0, 0], alpha=0.5):
     """ Overlay mask on image for visualization purpose.
     Args:
         image (H, W, 3) or (H, W): input image
@@ -74,7 +76,7 @@ def mask_image(image, mask, color=[255,0,0], alpha=0.5):
     out = deepcopy(image)
     img = deepcopy(image)
     img[mask == 1] = color
-    out = cv2.addWeighted(img, alpha, out, 1-alpha, 0, out)
+    out = cv2.addWeighted(img, alpha, out, 1 - alpha, 0, out)
     return out
 
 
@@ -90,29 +92,32 @@ def run_process(original_image, input_image, mask, selected_points, prompt_textb
                 save_data function and performs dragging based on the corresponding image address, mask address, prompt,
                 and relevant settings. It returns the drag's state and the resulting image. 
         The results obtained during each drag are saved in './output/`output_path`'.
-    """    
+    """
     save_data(original_image, input_image, mask, selected_points, prompt_textbox, output_path)
     if use_lora:
-        train_lora(original_image, prompt_textbox, model_path, save_lora_path, output_path, lora_step, progress=gr.Progress())
+        train_lora(original_image, prompt_textbox, model_path, save_lora_path, output_path, lora_step,
+                   progress=gr.Progress())
 
     path = os.path.join('drag_data', output_path)
     image_path = os.path.join(path, 'origin_image.png')
     mask_path = os.path.join(path, 'mask.png')
     with open(os.path.join(path, 'prompt.json'), 'r') as f:
         prompt = json.load(f)
-        
+
     save_lora_path = os.path.join(save_lora_path, output_path)
     os.makedirs(os.path.join("output", output_path), exist_ok=True)
     os.makedirs(save_lora_path, exist_ok=True)
 
-    for state_text, img in drag(image_path, mask_path, prompt['prompt'], prompt['source'], prompt['target'], drag_t, steps, step_size, image_scale, adapt_r, use_lora, lora_scale_min, save_lora_path, output_path, seed):
+    for state_text, img in drag(image_path, mask_path, prompt['prompt'], prompt['source'], prompt['target'], drag_t,
+                                steps, step_size, image_scale, adapt_r, use_lora, lora_scale_min, save_lora_path,
+                                output_path, seed):
         yield state_text, img
-    
+
 
 def save_data(original_image, input_image, mask, selected_points, prompt, output_path):
     """Save the user input image, its corresponding mask, prompts, as well as the source and target 
         points to the directory path './grad_data/output_path'.
-    """      
+    """
     path = os.path.join('drag_data', output_path)
     os.makedirs(path, exist_ok=True)
 
@@ -138,7 +143,7 @@ def save_data(original_image, input_image, mask, selected_points, prompt, output
 
 # Once user upload an image, the original image is stored in `original_image`,
 # the same image is displayed in `input_image` for point clicking purpose
-def store_img(img):    
+def store_img(img):
     image, mask = img["image"], np.float32(img["mask"][:, :, 0]) / 255.
     if mask.sum() > 0:
         mask = np.uint8(mask > 0)
@@ -157,6 +162,7 @@ def undo_points(original_image, mask):
     else:
         masked_img = original_image.copy()
     return masked_img, []
+
 
 def upload_point_image(input_image):
     return "Upload Failed. Please upload image via the leftmost canvas", None

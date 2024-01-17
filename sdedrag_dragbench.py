@@ -16,21 +16,22 @@
 # limitations under the License.
 # *************************************************************************
 
-import torch
-import os
 import argparse
-import tempfile
-import numpy as np
-from tqdm.auto import tqdm
-import PIL
-import math
-
-from PIL import Image
-from torchvision.utils import  save_image
-from cycle_sde import Sampler, load_model, get_img_latent, get_text_embed, set_seed
 import json
+import math
+import os
+import tempfile
 
+import PIL
+import numpy as np
+import torch
+from PIL import Image
+from torchvision.utils import save_image
+from tqdm.auto import tqdm
+
+from cycle_sde import Sampler, load_model, get_img_latent, get_text_embed, set_seed
 from utils.train_lora import train_lora
+
 
 def load_data(root='DragBench'):
     '''
@@ -72,43 +73,44 @@ def forward(opt, latents):
     '''
     noise adding process and analyticly compute \bar{w}
     '''
-    noises = []
-    imgs = []
+    forward_sample = []
+    forward_x_prev = []
     lora_scales = []
     cfg_scales = []
 
-    imgs.append(img)
     t_0 = int(opt.t_0 * opt.steps)
     t_begin = opt.steps - t_0
     length = len(scheduler.timesteps[t_begin - 1:-1]) - 1
 
     index = 1
+
+    forward_x_prev.append(latents)
     for t in tqdm(scheduler.timesteps[t_begin:].flip(dims=[0]), desc="Forward"):
         lora_scale = scale_schedule(1, opt.lora_scale_min, index, length, type='cos')
         cfg_scale = scale_schedule(1, opt.scale, index, length, type='linear')
-        latents, noise = sampler.forward_sde(t, latents, cfg_scale, text_embeddings, lora_scale=lora_scale)
-        noises.append(noise)
-        imgs.append(latents)
+
+        forward_sample.append(latents.clone())
+        latents = sampler.forward_sde(t, latents)
+        forward_x_prev.append(latents.clone())
+
         lora_scales.append(lora_scale)
         cfg_scales.append(cfg_scale)
         index += 1
-    return latents, noises, imgs, lora_scales, cfg_scales
+    return latents.clone(), forward_sample, forward_x_prev, lora_scales, cfg_scales
 
 
-def backward(opt, latents, noises, hook_latents, lora_scales, cfg_scales):
+def backward(opt, latents, forward_sample, forward_x_prev, lora_scales, cfg_scales):
     '''
     SDE sampling with analyticly computed \bar{w}
     '''
     t_0 = int(opt.t_0 * opt.steps)
     t_begin = opt.steps - t_0
 
-    hook_latent = hook_latents.pop()
-    latents = torch.where(mask > 128, latents, hook_latent)
     for t in tqdm(scheduler.timesteps[t_begin - 1:-1], desc="Backward"):
-        latents = sampler.sample(t, latents, cfg_scales.pop(), text_embeddings, sde=True, noise=noises.pop(), lora_scale=lora_scales.pop())
-        hook_latent = hook_latents.pop()
-        latents = torch.where(mask > 128, latents, hook_latent)
-    return latents
+        latents = sampler.sample(t, latents, forward_sample.pop(), forward_x_prev.pop(), cfg_scales.pop(),
+                                 text_embeddings, sde=True, lora_scale=lora_scales.pop())
+        latents = torch.where(mask > 128, latents, forward_x_prev[-1])
+    return latents.clone()
 
 
 def train_lora_and_load(image_path, prompt, unet):
@@ -119,78 +121,78 @@ def train_lora_and_load(image_path, prompt, unet):
 
     with tempfile.TemporaryDirectory() as temp_path:
         save_lora_path = temp_path
-        train_lora(image, prompt, model_path, save_lora_path, output_path=None, lora_step=lora_step, lora_rank=lora_rank)
+        train_lora(image, prompt, model_path, save_lora_path, output_path=None, lora_step=lora_step,
+                   lora_rank=lora_rank)
         unet.load_attn_procs(save_lora_path)
 
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-            "--seed",
-            type=int,
-            default=1234,
-            help='random seed'
+        "--seed",
+        type=int,
+        default=1234,
+        help='random seed'
     )
     parser.add_argument(
-            "--steps",
-            type=int,
-            default=200,
-            help="discretize [0, T] into 200 steps"
-        )
-    parser.add_argument(
-            "--t_0",
-            type=float,
-            default=0.6,
-            help="copy and paste at x_{t_0}"
-        )
-    parser.add_argument(
-            "--scale",
-            type=float,
-            default=3.,
-            help="CFG scale"
-        )
-    parser.add_argument(
-            "--step_size",
-            type=float,
-            default=2.,
-            help="drag by 2 pixels towards the target point each time"
-        )
-    parser.add_argument(
-            "--r",
-            type=int,
-            default=5,
-            help="radius of the square area for copy and paste."
-        )
-    parser.add_argument(
-            "--beta",
-            type=float,
-            default=0.3,
-            help="the noise level added to source area"
+        "--steps",
+        type=int,
+        default=200,
+        help="discretize [0, T] into 200 steps"
     )
     parser.add_argument(
-            "--alpha",
-            type=float,
-            default=1.1,
-            help="Enhance the signal strength of the target point."
+        "--t_0",
+        type=float,
+        default=0.6,
+        help="copy and paste at x_{t_0}"
     )
     parser.add_argument(
-            "--lora_steps",
-            type=int,
-            default=100,
-            help="LoRA finetuning steps"
+        "--scale",
+        type=float,
+        default=3.,
+        help="CFG scale"
     )
     parser.add_argument(
-            "--lora_scale_min",
-            type=float,
-            default=0.5,
-            help="reduce the LoRA scale from 1 to 0.5 as time goes from 0 to t_0"
+        "--step_size",
+        type=float,
+        default=2.,
+        help="drag by 2 pixels towards the target point each time"
+    )
+    parser.add_argument(
+        "--r",
+        type=int,
+        default=5,
+        help="radius of the square area for copy and paste."
+    )
+    parser.add_argument(
+        "--beta",
+        type=float,
+        default=0.3,
+        help="the noise level added to source area"
+    )
+    parser.add_argument(
+        "--alpha",
+        type=float,
+        default=1.1,
+        help="Enhance the signal strength of the target point."
+    )
+    parser.add_argument(
+        "--lora_steps",
+        type=int,
+        default=100,
+        help="LoRA finetuning steps"
+    )
+    parser.add_argument(
+        "--lora_scale_min",
+        type=float,
+        default=0.5,
+        help="reduce the LoRA scale from 1 to 0.5 as time goes from 0 to t_0"
     )
     opt = parser.parse_args()
     return opt
 
 
 def copy_and_paste(latents, source_new, target_new):
-
     def adaption_r(source, target, r, max_val=63):
         '''
         Adjust r to prevent arrays from going out of bounds
@@ -209,9 +211,11 @@ def copy_and_paste(latents, source_new, target_new):
             source_[0] - r_x_lower: source_[0] + r_x_upper].clone()
 
         latents[:, :, source_[1] - r_y_lower: source_[1] + r_y_upper, source_[0] - r_x_lower: source_[0] + r_x_upper] = \
-            opt.beta * source_feature + noise_scale * torch.randn(latents.shape[0], 4, r_y_lower + r_y_upper, r_x_lower + r_x_upper, device=torch_device)
+            opt.beta * source_feature + noise_scale * torch.randn(latents.shape[0], 4, r_y_lower + r_y_upper,
+                                                                  r_x_lower + r_x_upper, device=torch_device)
 
-        latents[:, :, target_[1] - r_y_lower: target_[1] + r_y_upper, target_[0] - r_x_lower: target_[0] + r_x_upper] = source_feature * opt.alpha
+        latents[:, :, target_[1] - r_y_lower: target_[1] + r_y_upper,
+        target_[0] - r_x_lower: target_[0] + r_x_upper] = source_feature * opt.alpha
     return latents
 
 
@@ -225,6 +229,7 @@ sampler = Sampler(model=unet, scheduler=scheduler, num_steps=opt.steps)
 torch_device = 'cuda'
 
 data = load_data()
+
 for path, item in data.items():
     prompt = item['prompt']
     source = torch.tensor(item['source']).div(torch.tensor([8]), rounding_mode='trunc')
@@ -262,9 +267,10 @@ for path, item in data.items():
             source_new = source + (i / drag_num * d).to(torch.int)
             target_new = source + ((i + 1) / drag_num * d).to(torch.int)
 
-            latents, noises, hook_latents, lora_scales, cfg_scales = forward(opt, img)
+            latents, forward_sample, forward_x_prev, lora_scales, cfg_scales = forward(opt, img)
+
             latents = copy_and_paste(latents, source_new, target_new)
-            img = backward(opt, latents, noises, hook_latents, lora_scales, cfg_scales)
+            img = backward(opt, latents, forward_sample, forward_x_prev, lora_scales, cfg_scales)
             imgs.append(img)
 
     # scale and decode the image latents with vae
@@ -280,4 +286,3 @@ for path, item in data.items():
 
     file_name = path.split('/')[-2]
     save_image(imgs, os.path.join(save_path, f'{file_name}.png'))
-

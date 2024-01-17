@@ -49,22 +49,25 @@ with gr.Blocks() as demo:
             length = 400
             with gr.Column():
                 gr.Markdown("""<p style="text-align: center; font-size: 25px">Draw Mask</p>""")
-                canvas = gr.Image(type="numpy", tool="sketch", label="Draw Mask", show_label=True, show_download_button=True, height=length, width=length)
+                canvas = gr.Image(type="numpy", tool="sketch", label="Draw Mask", show_label=True,
+                                  show_download_button=True, height=length, width=length)
                 with gr.Row():
                     use_lora = gr.Checkbox(label="Use LoRA")
 
             with gr.Column():
                 gr.Markdown("""<p style="text-align: center; font-size: 25px">Click Points</p>""")
-                input_image = gr.Image(type="numpy", label="Click Points", show_label=True, show_download_button=True, height=length, width=length)
+                input_image = gr.Image(type="numpy", label="Click Points", show_label=True, show_download_button=True,
+                                       height=length, width=length)
                 with gr.Row():
                     undo_button = gr.Button("Undo point")
 
             with gr.Column():
                 gr.Markdown("""<p style="text-align: center; font-size: 25px">Editing results</p>""")
-                editing_result = gr.Image(type="numpy", label="Editing Results", show_label=True, show_download_button=True, height=length, width=length)
+                editing_result = gr.Image(type="numpy", label="Editing Results", show_label=True,
+                                          show_download_button=True, height=length, width=length)
                 with gr.Row():
                     run_button = gr.Button("Run")
-        
+
         with gr.Row():
             with gr.Column():
                 state_textbox = gr.Textbox(label="State")
@@ -72,17 +75,17 @@ with gr.Blocks() as demo:
         with gr.Row():
             with gr.Column():
                 prompt_textbox = gr.Textbox(label="Prompt")
-        
+
         with gr.Row():
             output_path = gr.Textbox(value='default', label="Output path(eg: bear)")
-        
+
         with gr.Row():
             with gr.Tab("LoRA Parameters"):
                 with gr.Row():
                     model_path = gr.Dropdown(value="runwayml/stable-diffusion-v1-5",
-                        label="Diffusion model",
-                        choices=["runwayml/stable-diffusion-v1-5"]
-                    )
+                                             label="Diffusion model",
+                                             choices=["runwayml/stable-diffusion-v1-5"]
+                                             )
                     lora_path_textbox = gr.Textbox(label="LoRA path", value='./lora')
                     lora_step = gr.Number(value=100, label="LoRA training steps", precision=0)
                     lora_scale_min = gr.Number(value=0.5, label="Min LoRA scale")

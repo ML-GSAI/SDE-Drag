@@ -180,11 +180,11 @@ Results in DiffEdit
 
 ## :label: TODO
 
-- [ ] Optimize inference speed.
+- [x] Optimize inference speed.
 - [ ] Support more editing task.
 - [ ] Improve SDE-Drag UI.
 - [ ] Support more base model.
-- [ ] Integrated into diffusers and stable diffusion WebUI.
+- [x] Integrated into diffusers and stable diffusion WebUI.
 
 ## :hearts: Acknowledgement
 

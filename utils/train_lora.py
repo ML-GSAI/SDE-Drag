@@ -18,10 +18,12 @@
 
 
 import os
+
 import torch
 import torch.nn.functional as F
+from PIL import Image
 from accelerate import Accelerator
-from diffusers import (AutoencoderKL, DDPMScheduler,  UNet2DConditionModel)
+from diffusers import (AutoencoderKL, DDPMScheduler, UNet2DConditionModel)
 from diffusers.loaders import AttnProcsLayers, LoraLoaderMixin
 from diffusers.models.attention_processor import (AttnAddedKVProcessor,
                                                   AttnAddedKVProcessor2_0,
@@ -31,7 +33,6 @@ from diffusers.models.attention_processor import (AttnAddedKVProcessor,
                                                   SlicedAttnAddedKVProcessor)
 from diffusers.optimization import get_scheduler
 from diffusers.utils import check_min_version
-from PIL import Image
 from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer, PretrainedConfig
@@ -64,6 +65,7 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
     else:
         raise ValueError(f"{model_class} is not supported.")
 
+
 def tokenize_prompt(tokenizer, prompt, tokenizer_max_length=None):
     if tokenizer_max_length is not None:
         max_length = tokenizer_max_length
@@ -79,6 +81,7 @@ def tokenize_prompt(tokenizer, prompt, tokenizer_max_length=None):
     )
 
     return text_inputs
+
 
 def encode_prompt(text_encoder, input_ids, attention_mask, text_encoder_use_attention_mask=False):
     text_input_ids = input_ids.to(text_encoder.device)
