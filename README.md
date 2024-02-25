@@ -22,6 +22,10 @@
   </p>
 </p>
 
+## :label: News!
+- [2024.1.16] Our paper is accepted by ICLR2024!
+- [2024.2.25] Optimize inference speed. Only **about 70% of the time to drag an image** compared to the original paper.
+
 ## :hammer_and_wrench: Dependency
 
 ```sh
@@ -177,14 +181,6 @@ Results in DiffEdit
 </font></summary>
 <img src="./assets/results/diffedit_results.png" />
 </details>
-
-## :label: TODO
-
-- [x] Optimize inference speed.
-- [ ] Support more editing task.
-- [ ] Improve SDE-Drag UI.
-- [ ] Support more base model.
-- [x] Integrated into diffusers and stable diffusion WebUI.
 
 ## :hearts: Acknowledgement
 
