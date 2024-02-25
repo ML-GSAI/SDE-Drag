@@ -16,19 +16,18 @@
 # limitations under the License.
 # *************************************************************************
 
-import torch
-import os
 import argparse
+import os
 import random
 
 import numpy as np
-
+import torch
 from PIL import Image
-from transformers import CLIPTextModel, CLIPTokenizer
 from diffusers import AutoencoderKL, UNet2DConditionModel, DPMSolverMultistepScheduler
-from torchvision.utils import  save_image
 from torchvision import transforms
+from torchvision.utils import save_image
 from tqdm.auto import tqdm
+from transformers import CLIPTextModel, CLIPTokenizer
 
 
 def load_model(torch_device='cuda'):
@@ -91,28 +90,43 @@ class Sampler():
         self.model = model
 
     @torch.no_grad()
-    def get_eps(self, img, timestep, guidance_scale, text_embeddings, lora_scale=None):
-        latent_model_input = torch.cat([img] * 2) if guidance_scale > 1. else img
-        text_embeddings = text_embeddings if guidance_scale > 1. else text_embeddings.chunk(2)[1]
+    def get_eps(self, img, forward_img, timestep, guidance_scale, text_embeddings, lora_scale=None, is_diffedit=False):
+        latent_model_input = torch.cat([img, img, forward_img, forward_img]) if guidance_scale > 1. else torch.cat(
+            [img, forward_img])
+
+        if not is_diffedit:
+            text_embeddings = torch.cat([text_embeddings] * 2) if guidance_scale > 1. else torch.cat(
+                [text_embeddings.chunk(2)[1]] * 2)
+        else:
+            text_embeddings = torch.cat([text_embeddings[0], text_embeddings[1]]) if guidance_scale > 1. else torch.cat(
+                [text_embeddings[0].chunk(2)[1], text_embeddings[1].chunk(2)[1]])
 
         cross_attention_kwargs = None if lora_scale is None else {"scale": lora_scale}
+
         with torch.no_grad():
-            noise_pred = self.model(latent_model_input, timestep, encoder_hidden_states=text_embeddings, cross_attention_kwargs=cross_attention_kwargs).sample
+            noise_pred = self.model(latent_model_input, timestep, encoder_hidden_states=text_embeddings,
+                                    cross_attention_kwargs=cross_attention_kwargs).sample
 
         if guidance_scale > 1.:
-            noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+            noise_pred_uncond, noise_pred_text, forward_noise_pred_uncond, forward_noise_pred_text = noise_pred.chunk(4)
         elif guidance_scale == 1.:
-            noise_pred_text = noise_pred
+            noise_pred_text, forward_noise_pred_text = noise_pred.chunk(2)
             noise_pred_uncond = 0.
+            forward_noise_pred_uncond = 0.
         else:
             raise NotImplementedError(guidance_scale)
+
         noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+        forward_noise_pred = forward_noise_pred_uncond + guidance_scale * (
+                forward_noise_pred_text - forward_noise_pred_uncond)
 
-        return noise_pred
+        return noise_pred, forward_noise_pred
 
+    def sample(self, timestep, sample, forward_sample, forward_x_prev, guidance_scale, text_embeddings, sde=False,
+               eta=1., lora_scale=None, is_diffedit=False):
 
-    def sample(self, timestep, sample, guidance_scale, text_embeddings, sde=False, noise=None, eta=1., lora_scale=None):
-        eps = self.get_eps(sample, timestep, guidance_scale, text_embeddings, lora_scale)
+        eps, forward_eps = self.get_eps(sample, forward_x_prev, timestep, guidance_scale, text_embeddings, lora_scale,
+                                        is_diffedit)
 
         prev_timestep = timestep - self.num_train_timesteps // self.num_inference_steps
 
@@ -121,37 +135,43 @@ class Sampler():
 
         beta_prod_t = 1 - alpha_prod_t
 
-        sigma_t = eta * ((1 - alpha_prod_t_prev) / (1 - alpha_prod_t)) ** (0.5) * (1 - alpha_prod_t / alpha_prod_t_prev) ** (0.5) if sde else 0
+        sigma_t = eta * ((1 - alpha_prod_t_prev) / (1 - alpha_prod_t)) ** (0.5) * (
+                1 - alpha_prod_t / alpha_prod_t_prev) ** (0.5) if sde else 0
 
         pred_original_sample = (sample - beta_prod_t ** (0.5) * eps) / alpha_prod_t ** (0.5)
         pred_sample_direction_coeff = (1 - alpha_prod_t_prev - sigma_t ** 2) ** (0.5)
 
-        noise = torch.randn_like(sample, device=sample.device) if noise is None else noise
-        img = alpha_prod_t_prev ** (0.5) * pred_original_sample + pred_sample_direction_coeff * eps + sigma_t * noise
+        forward_alpha_prod_t = self.alphas_cumprod[
+            prev_timestep] if prev_timestep >= 0 else self.initial_alpha_cumprod
+        forward_alpha_prod_t_prev = self.alphas_cumprod[timestep]
+
+        forward_beta_prod_t_prev = 1 - forward_alpha_prod_t_prev
+
+        forward_sigma_t_prev = eta * ((1 - forward_alpha_prod_t) / (1 - forward_alpha_prod_t_prev)) ** (0.5) * (
+                1 - forward_alpha_prod_t_prev / forward_alpha_prod_t) ** (0.5)
+
+        forward_pred_original_sample = (forward_x_prev - forward_beta_prod_t_prev ** (
+            0.5) * forward_eps) / forward_alpha_prod_t_prev ** (0.5)
+        forward_pred_sample_direction_coeff = (1 - forward_alpha_prod_t - forward_sigma_t_prev ** 2) ** (0.5)
+
+        forward_noise = (forward_sample - forward_alpha_prod_t ** (
+            0.5) * forward_pred_original_sample - forward_pred_sample_direction_coeff * forward_eps) / forward_sigma_t_prev
+
+        img = alpha_prod_t_prev ** (
+            0.5) * pred_original_sample + pred_sample_direction_coeff * eps + sigma_t * forward_noise
 
         return img
 
-
-    def forward_sde(self, timestep, sample, guidance_scale, text_embeddings, eta=1., lora_scale=None):
+    def forward_sde(self, timestep, sample):
         prev_timestep = timestep + self.num_train_timesteps // self.num_inference_steps
 
         alpha_prod_t = self.alphas_cumprod[timestep] if timestep >= 0 else self.initial_alpha_cumprod
         alpha_prod_t_prev = self.alphas_cumprod[prev_timestep]
 
-        beta_prod_t_prev = 1 - alpha_prod_t_prev
+        x_prev = (alpha_prod_t_prev / alpha_prod_t) ** (0.5) * sample + (1 - alpha_prod_t_prev / alpha_prod_t) ** (
+            0.5) * torch.randn_like(sample, device=sample.device)
 
-        x_prev = (alpha_prod_t_prev / alpha_prod_t) ** (0.5) * sample + (1 - alpha_prod_t_prev / alpha_prod_t) ** (0.5) * torch.randn_like(sample, device=sample.device)
-        eps = self.get_eps(x_prev, prev_timestep, guidance_scale, text_embeddings, lora_scale)
-
-        sigma_t_prev = eta * ((1 - alpha_prod_t) / (1 - alpha_prod_t_prev)) ** (0.5) * (1 - alpha_prod_t_prev / alpha_prod_t) ** (0.5)
-
-        pred_original_sample = (x_prev - beta_prod_t_prev ** (0.5) * eps) / alpha_prod_t_prev ** (0.5)
-        pred_sample_direction_coeff = (1 - alpha_prod_t - sigma_t_prev ** 2) ** (0.5)
-
-        noise = (sample - alpha_prod_t ** (0.5) * pred_original_sample - pred_sample_direction_coeff * eps) / sigma_t_prev
-
-        return x_prev, noise
-
+        return x_prev
 
     def forward_ode(self, timestep, sample, guidance_scale, text_embeddings, lora_scale=None):
         prev_timestep = timestep + self.num_train_timesteps // self.num_inference_steps
@@ -172,27 +192,27 @@ class Sampler():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-            "--seed",
-            type=int,
-            default=1234,
-            help='random seed'
+        "--seed",
+        type=int,
+        default=1234,
+        help='random seed'
     )
     parser.add_argument(
-            "--steps",
-            type=int,
-            default=100,
-            help="number of sampling steps"
-        )
+        "--steps",
+        type=int,
+        default=100,
+        help="number of sampling steps"
+    )
     parser.add_argument(
-            "--scale",
-            type=float,
-            default=1.,
-            help="classifier-free guidance scale"
-        )
+        "--scale",
+        type=float,
+        default=1.,
+        help="classifier-free guidance scale"
+    )
     parser.add_argument(
-            "--float64",
-            action='store_true',
-            help="use double precision"
+        "--float64",
+        action='store_true',
+        help="use double precision"
     )
     opt = parser.parse_args()
     set_seed(opt.seed)
@@ -219,17 +239,20 @@ def main():
     # get vae latent
     latents = get_img_latent('assets/origin.png', vae, device, dtype=vae.dtype)
 
-    noises = []
+    forward_sample = []
+    forward_x_prev = []
     # forward process to get x_t0 and record and w'_s as Eq (7, 8)
     # t = [1, 2, ..., T-1]
     for t in tqdm(scheduler.timesteps[1:].flip(dims=[0]), desc="SDE Forward"):
-        latents, noise = sampler.forward_sde(t, latents, guidance_scale, text_embeddings)
-        noises.append(noise)
+        forward_sample.append(latents.clone())
+        latents = sampler.forward_sde(t, latents)
+        forward_x_prev.append(latents.clone())
 
     # cycle_sde sampling as Eq (6)
     # t = [T, T-1, ..., 2]
     for t in tqdm(scheduler.timesteps[:-1], desc="SDE Backward"):
-        latents = sampler.sample(t, latents, guidance_scale, text_embeddings, sde=True, noise=noises.pop())
+        latents = sampler.sample(t, latents, forward_sample.pop(), forward_x_prev.pop(), guidance_scale,
+                                 text_embeddings, sde=True)
 
     # VAE decode
     latents = 1 / 0.18215 * latents

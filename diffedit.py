@@ -20,66 +20,88 @@ import argparse
 import os
 
 import torch
-from diffusers import (DDIMInverseScheduler, DDIMScheduler,
-                       StableDiffusionDiffEditPipeline)
 from PIL import Image
+from diffusers import (DDIMInverseScheduler, DDIMScheduler, StableDiffusionDiffEditPipeline)
+from torchvision.utils import save_image
 from tqdm.auto import tqdm
 
 from cycle_sde import Sampler, get_img_latent, get_text_embed, set_seed
-from torchvision.utils import save_image
 
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-            "--seed",
-            type=int,
-            default=1234,
-            help='random seed'
+        "--seed",
+        type=int,
+        default=1234,
+        help='random seed'
     )
     parser.add_argument(
-            "--img_path",
-            type=str,
-            default='assets/origin.png',
-            help='image path'
+        "--img_path",
+        type=str,
+        default='assets/origin.png',
+        help='image path'
     )
     parser.add_argument(
-            "--source_prompt",
-            type=str,
-            default='a bowl of fruits',
-            help='prompt of source image'
+        "--source_prompt",
+        type=str,
+        default='a bowl of fruits',
+        help='prompt of source image'
     )
     parser.add_argument(
-            "--target_prompt",
-            type=str,
-            default='a bowl of bananas',
-            help='prompt of target image'
+        "--target_prompt",
+        type=str,
+        default='a bowl of bananas',
+        help='prompt of target image'
     )
     parser.add_argument(
-            "--steps",
-            type=int,
-            default=50,
-            help="discretize [0, T] into 50 steps"
-        )
-    parser.add_argument(
-            "--scale",
-            type=float,
-            default=7.5,
-            help="classifier-free guidance scale"
-        )
-    parser.add_argument(
-            "--encode_ratio",
-            type=float,
-            default=0.7,
-            help="encode ratio"
+        "--steps",
+        type=int,
+        default=50,
+        help="discretize [0, T] into 50 steps"
     )
     parser.add_argument(
-            "--sde",
-            action='store_true',
-            help="use diffedit-sde",
+        "--scale",
+        type=float,
+        default=7.5,
+        help="classifier-free guidance scale"
+    )
+    parser.add_argument(
+        "--encode_ratio",
+        type=float,
+        default=0.7,
+        help="encode ratio"
+    )
+    parser.add_argument(
+        "--sde",
+        action='store_true',
+        help="use diffedit-sde",
     )
     opt = parser.parse_args()
     return opt
+
+
+def forward(sampler, scheduler, t_begin, latents):
+    forward_sample = []
+    forward_x_prev = []
+    forward_x_prev.append(latents)
+    # forward process to get x_t0 and record and w'_s as Eq (7, 8)
+    for t in tqdm(scheduler.timesteps[t_begin:].flip(dims=[0]), desc="SDE Forward"):
+        forward_sample.append(latents)
+        latents = sampler.forward_sde(t, latents)
+        forward_x_prev.append(latents)
+    return latents, forward_sample, forward_x_prev
+
+
+def backward(opt, sampler, scheduler, t_begin, latents, mask_image, forward_sample, forward_x_prev,
+             text_embeddings_origin, text_embeddings_edit):
+    # cycle_sde sampling as Eq (6)
+    text_embeddings = [text_embeddings_edit, text_embeddings_origin]
+    for t in tqdm(scheduler.timesteps[t_begin - 1:-1], desc="SDE Backward"):
+        latents = sampler.sample(t, latents, forward_sample.pop(), forward_x_prev.pop(), opt.scale, text_embeddings,
+                                 sde=True, is_diffedit=True)
+        latents = latents * mask_image + forward_x_prev[-1] * (1 - mask_image)
+    return latents
 
 
 def main():
@@ -129,25 +151,14 @@ def main():
         # get VAE latent
         latents = get_img_latent(opt.img_path, vae, device, text_embeddings_origin.dtype)
 
-        noises = []
-        imgs = []
-        imgs.append(latents)
-        # forward process to get x_t0 and record and w'_s as Eq (7, 8)
-        for t in tqdm(scheduler.timesteps[t_begin:].flip(dims=[0]), desc="SDE Forward"):
-            latents, noise = sampler.forward_sde(t, latents, opt.scale, text_embeddings_origin)
-            noises.append(noise)
-            imgs.append(latents)
+        latents, forward_sample, forward_x_prev = forward(sampler, scheduler, t_begin, latents)
 
         mask_image[mask_image < 0.5] = 0
         mask_image[mask_image >= 0.5] = 1
         mask_image = torch.from_numpy(mask_image).to(vae.device)
-        imgs.pop()
 
-        # cycle_sde sampling as Eq (6)
-        for t in tqdm(scheduler.timesteps[t_begin - 1:-1], desc="SDE Backward"):
-            latents = sampler.sample(t, latents, opt.scale, text_embeddings_edit, sde=True, noise=noises.pop())
-            image_latents = imgs.pop()
-            latents = latents * mask_image + image_latents * (1 - mask_image)
+        latents = backward(opt, sampler, scheduler, t_begin, latents, mask_image, forward_sample, forward_x_prev,
+                           text_embeddings_origin, text_embeddings_edit)
 
         # VAE decode
         latents = 1 / 0.18215 * latents

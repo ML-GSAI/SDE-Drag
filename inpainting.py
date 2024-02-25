@@ -17,47 +17,47 @@
 # *************************************************************************
 
 
-import os
 import argparse
+import os
 
 import torch
-
+from PIL import Image
 from diffusers import (DPMSolverMultistepScheduler,
                        StableDiffusionInpaintPipeline)
-from PIL import Image
+
 from cycle_sde import set_seed
 
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-            "--seed",
-            type=int,
-            default=1234,
-            help='random seed'
+        "--seed",
+        type=int,
+        default=1234,
+        help='random seed'
     )
     parser.add_argument(
-            "--img_path",
-            type=str,
-            default='assets/inpainting',
-            help="origin image and mask path"
+        "--img_path",
+        type=str,
+        default='assets/inpainting',
+        help="origin image and mask path"
     )
     parser.add_argument(
-            "--steps",
-            type=int,
-            default=50,
-            help="sampling steps"
+        "--steps",
+        type=int,
+        default=50,
+        help="sampling steps"
     )
     parser.add_argument(
-            "--sde",
-            action='store_true',
-            help="use inpainting-sde",
+        "--sde",
+        action='store_true',
+        help="use inpainting-sde",
     )
     parser.add_argument(
-            "--order",
-            type=int,
-            default=1,
-            help='solver order'
+        "--order",
+        type=int,
+        default=1,
+        help='solver order'
     )
 
     opt = parser.parse_args()
