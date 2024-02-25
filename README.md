@@ -25,6 +25,7 @@
 ## :label: News!
 - [2024.1.16] Our paper is accepted by ICLR2024!
 - [2024.2.25] Optimize inference speed. Only **about 70% of the time to drag an image** compared to the original paper.
+- [2024.2.25] Integration with Diffusers library.
 
 ## :hammer_and_wrench: Dependency
 
@@ -33,10 +34,41 @@ conda create -n sdedrag python=3.9
 conda activate sdedrag
 
 pip install torch==2.0.0 torchvision transformers
-pip install diffusers==0.21.4 accelerate gradio opencv-python
+pip install diffusers==0.25.1 accelerate gradio opencv-python
 ```
 
 The pre-trained model of all experiments employed in this repo is [runwayml/stable-diffusion-v1-5](https://huggingface.co/runwayml/stable-diffusion-v1-5).
+
+## 🤗 **Integration with Diffusers library**
+```python
+import PIL
+import torch
+from diffusers import DDIMScheduler, DiffusionPipeline
+
+# Load the pipeline
+model_path = "runwayml/stable-diffusion-v1-5"
+scheduler = DDIMScheduler.from_pretrained(model_path, subfolder="scheduler")
+pipe = DiffusionPipeline.from_pretrained(model_path, scheduler=scheduler, custom_pipeline="sde_drag")
+pipe.to('cuda')
+
+# Provide prompt, image, mask image, and the starting and target points for drag editing.
+prompt = "Polar bear standing on the ice, waving to everyone"
+image = PIL.Image.open('assets/drag/origin_image.png')
+mask_image = PIL.Image.open('assets/drag/mask.png')
+source_points = [[145, 216]]
+target_points = [[146, 144]]
+
+# train_lora is optional, and in most cases, using train_lora can better preserve consistency with the original image.
+# If training LoRA, please use torch.float16 to save GPU memory
+# If NOT training LoRA, please avoid using torch.float16
+pipe.to(torch.float16)
+pipe.train_lora(prompt, image)
+
+# Please see [https://github.com/huggingface/diffusers/blob/main/examples/community/sde_drag.py#L63] for more hyper-parameters
+output = pipe(prompt, image, mask_image, source_points, target_points)
+output_image = PIL.Image.fromarray(output)
+output_image.save("./output.png")
+```
 
 ## :star: SDE-Drag
 
