@@ -81,7 +81,7 @@ To start the SDE-Drag GUI, simply run:
 python sdedrag_ui.py
 ```
 
-We provide a [GIF tutorial](https://github.com/NieShenRuc/SDE-Drag-backup/blob/master/assets/tutorial/tutorial-short.gif) for our GUI.
+We provide a [GIF tutorial](https://github.com/ML-GSAI/SDE-Drag/blob/master/assets/tutorial/tutorial-short.gif) for our GUI.
 Moreover, the GUI interface offers comprehensive step-by-step instructions.
 
 Generally, the usage of the SDE Drag GUI follows below steps:
